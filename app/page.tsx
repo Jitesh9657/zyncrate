@@ -4,7 +4,7 @@ import { useState } from "react";
 export default function Home() {
   const [fileName, setFileName] = useState(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files[0];
     if (file) setFileName(file.name);
   };
