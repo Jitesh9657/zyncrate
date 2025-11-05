@@ -1,87 +1,106 @@
+// middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { queryDB } from "@/lib/db"; // ✅ D1 query helper
 
-export async function middleware(req: NextRequest) {
+export const runtime = "edge"; // ✅ Required for Cloudflare
+
+export async function middleware(req: NextRequest, env: any) {
   const authHeader = req.headers.get("authorization");
   const cookieToken = req.cookies.get("auth_token")?.value;
   const token = authHeader?.replace("Bearer ", "") || cookieToken;
   const requestHeaders = new Headers(req.headers);
 
-  // 👇 Default: assume guest
+  // 👇 Default values
   let userType = "guest";
   let userId: number | null = null;
   let userPlan = "free";
   let guestToken = req.cookies.get("guest_id")?.value;
 
-  // 1️⃣ Check if a logged-in user
+  // 1️⃣ Logged-in user check
   if (token) {
-    const user = db
-      .prepare("SELECT id, email, plan FROM users WHERE auth_token = ?")
-      .get(token);
+    try {
+      const { results: users } = await queryDB(
+        env,
+        "SELECT id, email, plan FROM users WHERE auth_token = ?",
+        [token]
+      );
 
-    if (user) {
-      userType = "user";
-      userId = user.id;
-      userPlan = user.plan || "free";
+      const user = users?.[0];
+      if (user) {
+        userType = "user";
+        userId = user.id;
+        userPlan = user.plan || "free";
 
-      requestHeaders.set("x-user-type", "user");
-      requestHeaders.set("x-user-id", String(user.id));
-      requestHeaders.set("x-user-email", user.email);
-      requestHeaders.set("x-user-plan", userPlan);
+        requestHeaders.set("x-user-type", "user");
+        requestHeaders.set("x-user-id", String(user.id));
+        requestHeaders.set("x-user-email", user.email);
+        requestHeaders.set("x-user-plan", userPlan);
 
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      });
+        return NextResponse.next({
+          request: { headers: requestHeaders },
+        });
+      }
+
+      // 2️⃣ Check if token belongs to a guest
+      const { results: guests } = await queryDB(
+        env,
+        "SELECT id, temp_token FROM guests WHERE temp_token = ?",
+        [token]
+      );
+
+      const guest = guests?.[0];
+      if (guest) {
+        requestHeaders.set("x-user-type", "guest");
+        requestHeaders.set("x-guest-id", String(guest.id));
+
+        return NextResponse.next({
+          request: { headers: requestHeaders },
+        });
+      }
+
+      // 3️⃣ Invalid token
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    } catch (err) {
+      console.error("Middleware auth check failed:", err);
+      return NextResponse.json({ error: "Internal auth check error" }, { status: 500 });
     }
-
-    // 2️⃣ Check if it's a valid guest token
-    const guest = db
-      .prepare("SELECT id, temp_token FROM guests WHERE temp_token = ?")
-      .get(token);
-
-    if (guest) {
-      userType = "guest";
-      requestHeaders.set("x-user-type", "guest");
-      requestHeaders.set("x-guest-id", String(guest.id));
-
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      });
-    }
-
-    // 3️⃣ If token is invalid, reject
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  // 4️⃣ No token → create or reuse guest session
+  // 4️⃣ Guest session creation if none exists
   if (!guestToken) {
-    guestToken = crypto.randomUUID();
+    guestToken = crypto.randomUUID(); // ✅ Web Crypto API
     const now = Date.now();
-    db.prepare(
+    const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+
+    await queryDB(
+      env,
       `INSERT INTO guests (temp_token, created_at, expires_at, last_activity)
-       VALUES (?, ?, ?, ?)`
-    ).run(guestToken, now, now + 7 * 24 * 60 * 60 * 1000, now);
+       VALUES (?, ?, ?, ?)`,
+      [guestToken, now, expiresAt, now]
+    );
   }
 
+  // Set guest info headers
   requestHeaders.set("x-user-type", userType);
   requestHeaders.set("x-user-plan", userPlan);
   requestHeaders.set("x-guest-id", guestToken);
 
+  // Build response and set cookie
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
 
-  // Set guest_id cookie for future API requests
   response.cookies.set("guest_id", guestToken, {
     maxAge: 7 * 24 * 60 * 60, // 7 days
     path: "/",
+    sameSite: "lax",
   });
 
   return response;
 }
 
+// ✅ Apply to all API routes
 export const config = {
-  matcher: ["/api/:path*"], // applies to all API routes
+  matcher: ["/api/:path*"],
 };

@@ -1,7 +1,10 @@
+// app/api/download-info/route.ts
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
+import { queryDB } from "@/lib/db";
 
-export async function GET(req: Request) {
+export const runtime = "edge"; // ✅ Needed for Cloudflare Pages
+
+export async function GET(req: Request, env: any) {
   try {
     const url = new URL(req.url);
     const key = url.searchParams.get("key");
@@ -10,16 +13,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing key" }, { status: 400 });
     }
 
-    const file = db.prepare("SELECT * FROM files WHERE key = ?").get(key);
+    // ✅ Query Cloudflare D1
+    const { results } = await queryDB(env, "SELECT * FROM files WHERE key = ?", [key]);
+    const file = results?.[0];
+
     if (!file) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
     return NextResponse.json({
       file_name: file.file_name,
-      size: file.size,
+      file_size: file.file_size,
       created_at: file.created_at,
-      expires_in: file.expires_in,
+      expires_at: file.expires_at,
       download_count: file.download_count || 0,
       max_downloads: file.max_downloads || null,
     });

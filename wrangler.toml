@@ -1,12 +1,18 @@
 name = "zyncrate"
-compatibility_date = "2024-11-01"
+compatibility_date = "2025-01-01"
 pages_build_output_dir = ".vercel/output/static"
 
+# === D1 Database Binding ===
 [[d1_databases]]
 binding = "DB"
 database_name = "zyncrate_db"
 database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
 
+# === R2 Bucket Binding ===
 [[r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "zyncrate"
+
+# === Environment Variables (fallbacks if not in dashboard) ===
+[vars]
+BASE_URL = "https://zyncrate.pages.dev"

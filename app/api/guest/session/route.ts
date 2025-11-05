@@ -1,25 +1,32 @@
+// app/api/guest/session/route.ts
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
 import { nanoid } from "nanoid";
+import { queryDB } from "@/lib/db";
 
-export async function GET(req: Request) {
+export const runtime = "edge"; // ✅ Cloudflare Pages edge environment
+
+export async function GET(req: Request, env: any) {
   try {
     const session_id = nanoid(16);
     const auth_token = nanoid(32);
     const now = Date.now();
     const expires_at = now + 7 * 24 * 60 * 60 * 1000; // 7 days
 
-    // Capture IP and UA for basic analytics
+    // Capture IP and User-Agent
     const ip = req.headers.get("x-forwarded-for") || "unknown";
     const ua = req.headers.get("user-agent") || "unknown";
 
-    // Store guest info
-    db.prepare(`
-      INSERT INTO guests (session_id, auth_token, created_at, expires_at, ip_address, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(session_id, auth_token, now, expires_at, ip, ua);
+    // ✅ Insert guest record into Cloudflare D1
+    await queryDB(
+      env,
+      `
+        INSERT INTO guests (temp_token, created_at, expires_at, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [auth_token, now, expires_at, ip, ua]
+    );
 
-    // Build response
+    // ✅ Build response
     const res = NextResponse.json({
       success: true,
       session_id,
@@ -27,8 +34,8 @@ export async function GET(req: Request) {
       expires_at,
     });
 
-    // Set auth cookie for persistence
-    res.cookies.set("guest_token", auth_token, {
+    // ✅ Set cookie (Cloudflare supports it)
+    res.cookies.set("auth_token", auth_token, {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60, // 7 days
@@ -36,8 +43,11 @@ export async function GET(req: Request) {
     });
 
     return res;
-  } catch (err) {
+  } catch (err: any) {
     console.error("Guest session error:", err);
-    return NextResponse.json({ error: "Failed to create guest session" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Failed to create guest session" },
+      { status: 500 }
+    );
   }
 }

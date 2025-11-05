@@ -1,4 +1,4 @@
-import db from "@/lib/db";
+import db from "@/lib/db.local";
 
 // default base config
 export const BASE_CONFIG = {
