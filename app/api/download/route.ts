@@ -31,6 +31,8 @@ export async function GET(req: Request, env: any) {
     // ✅ 2. Handle expiry
     if (file.expires_at && Date.now() > Number(file.expires_at)) {
       try {
+        const r2 = getR2Client(env);
+        
         await r2.send(
           new DeleteObjectCommand({
             Bucket: env.R2_BUCKET,

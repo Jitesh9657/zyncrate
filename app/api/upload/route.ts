@@ -56,6 +56,7 @@ export async function POST(req: Request, env: any) {
     // ✅ Upload file to R2
     const key = `${nanoid(16)}-${file.name}`;
     const arrayBuffer = await file.arrayBuffer();
+    const r2 = getR2Client(env);
     await r2.send(
       new PutObjectCommand({
         Bucket: env.R2_BUCKET,
