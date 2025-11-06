@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BASE_CONFIG } from '@/lib/config'; // ✅ replaced CONFIG with BASE_CONFIG
-import { getExpiryOptions, getLimits } from '@/lib/getLimits';
+import { BASE_CONFIG } from '@/lib/config'; // ✅ static fallback
+import { getExpiryOptions } from '@/lib/getLimits'; // ✅ no getLimits here
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -14,21 +14,14 @@ export default function UploadPage() {
   const [lockKey, setLockKey] = useState<string>('');
   const [expiryOptions, setExpiryOptions] = useState<number[]>([]);
 
-  // Assume guest for now (middleware sets actual values later)
   const userType = 'guest';
   const plan = 'free';
-  const limits = getLimits(userType, plan);
+  const limits = BASE_CONFIG.limits[userType === "guest" ? "guest" : plan === "pro" ? "userPro" : "userFree"];
 
   useEffect(() => {
-  // if getExpiryOptions is async (Cloudflare config/load), await it safely
     async function loadExpiryOptions() {
-      try {
-        const opts = await getExpiryOptions(userType, plan);
-        setExpiryOptions(opts || []);
-      } catch (e) {
-        console.warn("Failed to load expiry options:", e);
-        setExpiryOptions([]); // fallback
-      }
+      const opts = await getExpiryOptions(userType, plan);
+      setExpiryOptions(opts || []);
     }
     loadExpiryOptions();
   }, []);
