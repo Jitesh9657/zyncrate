@@ -20,8 +20,19 @@ export default function UploadPage() {
   const limits = getLimits(userType, plan);
 
   useEffect(() => {
-    setExpiryOptions(getExpiryOptions(userType, plan));
+  // if getExpiryOptions is async (Cloudflare config/load), await it safely
+    async function loadExpiryOptions() {
+      try {
+        const opts = await getExpiryOptions(userType, plan);
+        setExpiryOptions(opts || []);
+      } catch (e) {
+        console.warn("Failed to load expiry options:", e);
+        setExpiryOptions([]); // fallback
+      }
+    }
+    loadExpiryOptions();
   }, []);
+
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
