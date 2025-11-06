@@ -1,7 +1,7 @@
 // app/api/download/route.ts
 import { NextResponse } from "next/server";
 import { GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { r2 } from "@/lib/r2";
+import { getR2Client } from "@/lib/r2";
 import { queryDB, execDB } from "@/lib/db"; // ✅ use execDB for write queries
 
 export const runtime = "edge"; // ✅ Required for Cloudflare Pages (edge environment)

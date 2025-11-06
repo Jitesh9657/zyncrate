@@ -1,20 +1,17 @@
-// app/lib/r2.ts
+// lib/r2.ts
 import { S3Client } from "@aws-sdk/client-s3";
 
 /**
- * ✅ Creates a Cloudflare R2-compatible S3 client.
- * Automatically works for both local `.env` and Cloudflare Edge environments.
+ * ✅ Lazy initializer for Cloudflare R2 client
+ * Works in both build-time and runtime contexts.
  */
 export function getR2Client(env?: any) {
-  const endpoint =
-    env?.R2_ENDPOINT || process.env.R2_ENDPOINT;
-  const accessKeyId =
-    env?.R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey =
-    env?.R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
+  const endpoint = env?.R2_ENDPOINT || process.env.R2_ENDPOINT;
+  const accessKeyId = env?.R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = env?.R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
 
   if (!endpoint || !accessKeyId || !secretAccessKey) {
-    console.error("⚠️ Missing R2 credentials or endpoint.");
+    console.warn("⚠️ Missing R2 credentials or endpoint.");
     throw new Error("R2 client initialization failed — missing credentials.");
   }
 
@@ -27,9 +24,3 @@ export function getR2Client(env?: any) {
     },
   });
 }
-
-/**
- * Default R2 client (for local development use only).
- * In Cloudflare, always use `getR2Client(env)` from your route handlers.
- */
-export const r2 = getR2Client(process.env);
