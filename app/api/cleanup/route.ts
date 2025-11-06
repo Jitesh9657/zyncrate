@@ -10,6 +10,9 @@ export async function GET(req: Request, env: any) {
   try {
     const now = Date.now();
 
+    // ✅ Initialize R2 client (runtime-safe)
+    const r2 = getR2Client(env);
+
     // ✅ Get expired files using D1
     const { results: expiredFiles } = await queryDB(
       env,
