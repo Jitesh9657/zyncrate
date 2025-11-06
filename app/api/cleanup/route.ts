@@ -2,18 +2,18 @@
 import { NextResponse } from "next/server";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
-import { queryDB } from "@/lib/db"; // ✅ new D1 query helper
+import { queryDB, execDB } from "@/lib/db"; // ✅ use execDB for mutations
 
-export const runtime = "edge"; // ✅ Required for Cloudflare Pages
+export const runtime = "edge"; // ✅ ensures Cloudflare compatibility
 
 export async function GET(req: Request, env: any) {
   try {
     const now = Date.now();
 
-    // ✅ Fetch expired files (use D1)
+    // ✅ Get expired files using D1
     const { results: expiredFiles } = await queryDB(
       env,
-      `SELECT id, key FROM files WHERE expires_at < ?`,
+      `SELECT id, key FROM files WHERE expires_at IS NOT NULL AND expires_at < ?`,
       [now]
     );
 
@@ -24,24 +24,24 @@ export async function GET(req: Request, env: any) {
       });
     }
 
-    // ✅ Delete files from R2
-    for (const f of expiredFiles) {
+    // ✅ Delete from R2
+    for (const file of expiredFiles) {
       try {
         await r2.send(
           new DeleteObjectCommand({
-            Bucket: env.R2_BUCKET,
-            Key: f.key,
+            Bucket: env.R2_BUCKET, // Cloudflare binding
+            Key: file.key,
           })
         );
       } catch (err) {
-        console.error("⚠️ Failed to delete from R2:", f.key, err);
+        console.error("⚠️ Failed to delete R2 object:", file.key, err);
       }
     }
 
-    // ✅ Remove records from DB
+    // ✅ Delete from D1
     const ids = expiredFiles.map((f) => f.id);
     const placeholders = ids.map(() => "?").join(",");
-    await queryDB(env, `DELETE FROM files WHERE id IN (${placeholders})`, ids);
+    await execDB(env, `DELETE FROM files WHERE id IN (${placeholders})`, ids);
 
     return NextResponse.json({
       success: true,
@@ -50,6 +50,9 @@ export async function GET(req: Request, env: any) {
     });
   } catch (err: any) {
     console.error("🔥 Cleanup error:", err);
-    return NextResponse.json({ error: "Cleanup failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Cleanup failed" },
+      { status: 500 }
+    );
   }
 }

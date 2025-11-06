@@ -1,6 +1,6 @@
 // app/api/user/login/route.ts
 import { NextResponse } from "next/server";
-import { queryDB } from "@/lib/db";
+import { queryDB, execDB } from "@/lib/db";
 import { nanoid } from "nanoid";
 
 export const runtime = "edge"; // ✅ Cloudflare Edge-compatible
@@ -10,15 +10,15 @@ type ReqBody = {
   password?: string;
 };
 
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  // ✅ Use Web Crypto API (Edge compatible)
+// ✅ Edge-safe password verification (SHA-256)
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hexHash = Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, "0"))
+    .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  return hexHash === hash; // Compare hashes (simple SHA-based)
+  return hexHash === storedHash;
 }
 
 export async function POST(req: Request, env: any) {
@@ -29,57 +29,61 @@ export async function POST(req: Request, env: any) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: "Email and password required" },
+        { error: "Email and password required." },
         { status: 400 }
       );
     }
 
-    // ✅ Fetch user from D1
+    // ✅ Fetch user from Cloudflare D1
     const { results } = await queryDB(
       env,
-      "SELECT id, password_hash FROM users WHERE email = ?",
+      "SELECT id, email, password_hash, plan FROM users WHERE email = ?",
       [email]
     );
 
     const user = results?.[0];
     if (!user) {
       return NextResponse.json(
-        { error: "No account found with this email" },
+        { error: "No account found with this email." },
         { status: 404 }
       );
     }
 
-    // ✅ Verify password (SHA-256 version)
-    const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid password" }, { status: 401 });
+    // ✅ Verify password
+    const isValid = await verifyPassword(password, user.password_hash);
+    if (!isValid) {
+      return NextResponse.json({ error: "Invalid password." }, { status: 401 });
     }
 
-    // ✅ Generate and store auth token
+    // ✅ Generate a new auth token
     const auth_token = nanoid(32);
-    await queryDB(env, "UPDATE users SET auth_token = ? WHERE id = ?", [
+    await execDB(env, "UPDATE users SET auth_token = ? WHERE id = ?", [
       auth_token,
       user.id,
     ]);
 
-    // ✅ Return with token + cookie
-    const res = NextResponse.json({
+    // ✅ Build response
+    const response = NextResponse.json({
       success: true,
-      user: { id: user.id, email },
+      user: { id: user.id, email: user.email, plan: user.plan },
       auth_token,
-      message: "Login successful — token stored.",
+      message: "Login successful — token issued.",
     });
 
-    res.cookies.set("auth_token", auth_token, {
+    // ✅ Set secure cookie
+    response.cookies.set("auth_token", auth_token, {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: "/",
     });
 
-    return res;
-  } catch (err: any) {
-    console.error("🔥 Login error:", err);
-    return NextResponse.json({ error: "Failed to login" }, { status: 500 });
+    return response;
+  } catch (error: any) {
+    console.error("🔥 Login error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to login." },
+      { status: 500 }
+    );
   }
 }

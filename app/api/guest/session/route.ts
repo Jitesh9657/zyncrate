@@ -1,52 +1,54 @@
 // app/api/guest/session/route.ts
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { queryDB } from "@/lib/db";
+import { execDB } from "@/lib/db"; // ✅ use execDB for INSERT/UPDATE/DELETE
 
-export const runtime = "edge"; // ✅ Cloudflare Pages edge environment
+export const runtime = "edge"; // ✅ Required for Cloudflare Pages / Edge Runtime
 
 export async function GET(req: Request, env: any) {
   try {
+    // ✅ Generate identifiers
     const session_id = nanoid(16);
     const auth_token = nanoid(32);
     const now = Date.now();
-    const expires_at = now + 7 * 24 * 60 * 60 * 1000; // 7 days
+    const expires_at = now + 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
-    // Capture IP and User-Agent
+    // ✅ Capture request metadata
     const ip = req.headers.get("x-forwarded-for") || "unknown";
     const ua = req.headers.get("user-agent") || "unknown";
 
-    // ✅ Insert guest record into Cloudflare D1
-    await queryDB(
+    // ✅ Insert guest into D1
+    await execDB(
       env,
       `
-        INSERT INTO guests (temp_token, created_at, expires_at, ip_address, user_agent)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO guests (temp_token, created_at, expires_at, ip_address, user_agent, last_activity)
+        VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [auth_token, now, expires_at, ip, ua]
+      [auth_token, now, expires_at, ip, ua, now]
     );
 
-    // ✅ Build response
-    const res = NextResponse.json({
+    // ✅ Build response body
+    const response = NextResponse.json({
       success: true,
       session_id,
       auth_token,
       expires_at,
+      message: "Guest session created successfully.",
     });
 
-    // ✅ Set cookie (Cloudflare supports it)
-    res.cookies.set("auth_token", auth_token, {
+    // ✅ Set persistent guest cookie (for 7 days)
+    response.cookies.set("guest_token", auth_token, {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: "/",
     });
 
-    return res;
-  } catch (err: any) {
-    console.error("Guest session error:", err);
+    return response;
+  } catch (error: any) {
+    console.error("🔥 Guest session error:", error);
     return NextResponse.json(
-      { error: err.message || "Failed to create guest session" },
+      { error: error.message || "Failed to create guest session" },
       { status: 500 }
     );
   }

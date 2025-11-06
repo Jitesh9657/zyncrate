@@ -1,6 +1,10 @@
-import db from "@/lib/db.local";
+// app/lib/config.ts
+import { queryDB } from "@/lib/db";
 
-// default base config
+/**
+ * Default base configuration.
+ * Used if there are no overrides in the D1 `settings` table.
+ */
 export const BASE_CONFIG = {
   storage: {
     provider: "r2", // or "local" or "s3"
@@ -16,40 +20,61 @@ export const BASE_CONFIG = {
 };
 
 /**
- * Loads config, optionally overriding base values from DB.settings table.
- * This allows changing system limits at runtime (no redeploy required).
+ * Load configuration overrides dynamically from Cloudflare D1.
+ * - Reads `key`, `value` pairs from the `settings` table.
+ * - Safely merges overrides into BASE_CONFIG.
+ * - Returns the merged config object.
  */
-export function loadConfig() {
-  const config = JSON.parse(JSON.stringify(BASE_CONFIG)); // deep clone
-  try {
-    const rows = db.prepare("SELECT key, value FROM settings").all();
+export async function loadConfig(env: any) {
+  // Clone base config deeply (Edge-compatible)
+  const config = JSON.parse(JSON.stringify(BASE_CONFIG));
 
-    for (const row of rows) {
+  try {
+    // 🔹 Query D1 for overrides
+    const { results } = await queryDB(env, "SELECT key, value FROM settings");
+    if (!results || results.length === 0) {
+      return config;
+    }
+
+    for (const row of results) {
       const path = row.key.split(".");
       let target: any = config;
+
+      // Traverse nested keys like "limits.userPro.maxUploadSizeMB"
       for (let i = 0; i < path.length - 1; i++) {
         if (!(path[i] in target)) target[path[i]] = {};
         target = target[path[i]];
       }
 
       const finalKey = path[path.length - 1];
-      // Try to parse JSON or number
       let val: any = row.value;
-      if (/^\d+$/.test(val)) val = parseInt(val);
-      else if (/^\d+\.\d+$/.test(val)) val = parseFloat(val);
-      else if (val === "true" || val === "false") val = val === "true";
-      else if (val.startsWith("{") || val.startsWith("[")) {
-        try { val = JSON.parse(val); } catch {}
+
+      // 🔹 Type conversions
+      if (typeof val === "string") {
+        if (/^\d+$/.test(val)) val = parseInt(val);
+        else if (/^\d+\.\d+$/.test(val)) val = parseFloat(val);
+        else if (val === "true" || val === "false") val = val === "true";
+        else if ((val.startsWith("{") && val.endsWith("}")) || (val.startsWith("[") && val.endsWith("]"))) {
+          try {
+            val = JSON.parse(val);
+          } catch {}
+        }
       }
 
       target[finalKey] = val;
     }
-  } catch (err) {
-    console.warn("⚠️ Could not load settings overrides:", err);
-  }
 
-  return config;
+    return config;
+  } catch (err) {
+    console.warn("⚠️ Failed to load settings from D1 (using defaults):", err);
+    return config;
+  }
 }
 
-// export a single runtime config (cached)
-export const CONFIG = loadConfig();
+/**
+ * Helper to get runtime config easily in routes:
+ * `const CONFIG = await getConfig(env);`
+ */
+export async function getConfig(env: any) {
+  return await loadConfig(env);
+}

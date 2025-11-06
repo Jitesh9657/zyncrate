@@ -1,9 +1,9 @@
 // middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { queryDB } from "@/lib/db"; // ✅ D1 query helper
+import { queryDB, execDB } from "@/lib/db"; // ✅ Use execDB for inserts
 
-export const runtime = "edge"; // ✅ Required for Cloudflare
+export const runtime = "edge"; // ✅ Cloudflare Pages / Workers compatible
 
 export async function middleware(req: NextRequest, env: any) {
   const authHeader = req.headers.get("authorization");
@@ -11,15 +11,15 @@ export async function middleware(req: NextRequest, env: any) {
   const token = authHeader?.replace("Bearer ", "") || cookieToken;
   const requestHeaders = new Headers(req.headers);
 
-  // 👇 Default values
+  // Default user context
   let userType = "guest";
   let userId: number | null = null;
   let userPlan = "free";
   let guestToken = req.cookies.get("guest_id")?.value;
 
-  // 1️⃣ Logged-in user check
-  if (token) {
-    try {
+  try {
+    // 1️⃣ Check for logged-in user via auth token
+    if (token) {
       const { results: users } = await queryDB(
         env,
         "SELECT id, email, plan FROM users WHERE auth_token = ?",
@@ -59,45 +59,49 @@ export async function middleware(req: NextRequest, env: any) {
         });
       }
 
-      // 3️⃣ Invalid token
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    } catch (err) {
-      console.error("Middleware auth check failed:", err);
-      return NextResponse.json({ error: "Internal auth check error" }, { status: 500 });
+      // 3️⃣ Invalid token → reject
+      return NextResponse.json({ error: "Invalid or expired token." }, { status: 401 });
     }
-  }
 
-  // 4️⃣ Guest session creation if none exists
-  if (!guestToken) {
-    guestToken = crypto.randomUUID(); // ✅ Web Crypto API
-    const now = Date.now();
-    const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+    // 4️⃣ If no token, create new guest session
+    if (!guestToken) {
+      guestToken = crypto.randomUUID(); // ✅ Edge-safe random ID
+      const now = Date.now();
+      const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
 
-    await queryDB(
-      env,
-      `INSERT INTO guests (temp_token, created_at, expires_at, last_activity)
-       VALUES (?, ?, ?, ?)`,
-      [guestToken, now, expiresAt, now]
+      await execDB(
+        env,
+        `INSERT INTO guests (temp_token, created_at, expires_at, last_activity)
+         VALUES (?, ?, ?, ?)`,
+        [guestToken, now, expiresAt, now]
+      );
+    }
+
+    // ✅ Set headers for guest or user
+    requestHeaders.set("x-user-type", userType);
+    requestHeaders.set("x-user-plan", userPlan);
+    requestHeaders.set("x-guest-id", guestToken);
+
+    // ✅ Continue request flow
+    const response = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+
+    // ✅ Set cookie for persistent guest sessions
+    response.cookies.set("guest_id", guestToken, {
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: "/",
+      sameSite: "lax",
+    });
+
+    return response;
+  } catch (err) {
+    console.error("🔥 Middleware auth error:", err);
+    return NextResponse.json(
+      { error: "Authentication middleware failed." },
+      { status: 500 }
     );
   }
-
-  // Set guest info headers
-  requestHeaders.set("x-user-type", userType);
-  requestHeaders.set("x-user-plan", userPlan);
-  requestHeaders.set("x-guest-id", guestToken);
-
-  // Build response and set cookie
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-
-  response.cookies.set("guest_id", guestToken, {
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-    path: "/",
-    sameSite: "lax",
-  });
-
-  return response;
 }
 
 // ✅ Apply to all API routes
