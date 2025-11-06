@@ -24,8 +24,13 @@ export default function UploadPage() {
       : BASE_CONFIG.limits.userFree;
 
   useEffect(() => {
-    setExpiryOptions(getExpiryOptions(userType, plan));
+    async function load() {
+      const options = await getExpiryOptions(userType, plan);
+      setExpiryOptions(options);
+    }
+    load();
   }, []);
+
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
