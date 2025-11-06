@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CONFIG } from '@/lib/config';
+import { BASE_CONFIG } from '@/lib/config'; // ✅ replaced CONFIG with BASE_CONFIG
 import { getExpiryOptions, getLimits } from '@/lib/getLimits';
 
 export default function UploadPage() {
