@@ -15,8 +15,13 @@ export default function UploadPage() {
   const [expiryOptions, setExpiryOptions] = useState<number[]>([]);
 
   const userType = 'guest';
-  const plan = 'free';
-  const limits = BASE_CONFIG.limits[userType === "guest" ? "guest" : plan === "pro" ? "userPro" : "userFree"];
+  const plan: string = 'free';
+  const limits =
+    userType === "guest"
+      ? BASE_CONFIG.limits.guest
+      : plan === "pro"
+      ? BASE_CONFIG.limits.userPro
+      : BASE_CONFIG.limits.userFree;
 
   useEffect(() => {
     setExpiryOptions(getExpiryOptions(userType, plan));
