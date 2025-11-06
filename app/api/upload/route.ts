@@ -2,17 +2,20 @@
 import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
-import { CONFIG } from "@/lib/config";
-import { execDB } from "@/lib/db"; // ✅ use execDB for inserts
-import { nanoid } from "nanoid"; // ✅ Edge-compatible alternative to crypto.randomUUID
+import { loadConfig } from "@/lib/config";   // ✅ fixed import
+import { execDB } from "@/lib/db";           // ✅ D1 helper
+import { nanoid } from "nanoid";             // ✅ edge-safe id generator
 
 export const runtime = "edge"; // ✅ Cloudflare Pages compatible (Edge Runtime)
 
 export async function POST(req: Request, env: any) {
   console.log("⏳ Upload route hit (Cloudflare Edge)");
 
+  // ✅ dynamically load config (since config values come from D1)
+  const CONFIG = await loadConfig(env);
+
   try {
-    // ✅ Identify uploader (middleware injects headers)
+    // ✅ Identify uploader
     const userType = req.headers.get("x-user-type") || "guest";
     const userId = req.headers.get("x-user-id") || null;
     const guestId = req.headers.get("x-guest-id") || null;
@@ -20,7 +23,6 @@ export async function POST(req: Request, env: any) {
     // ✅ Parse incoming form data
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
@@ -31,7 +33,7 @@ export async function POST(req: Request, env: any) {
     const lockKey = (formData.get("lock_key") as string) || null;
     const oneTime = formData.get("one_time") === "1" || formData.get("one_time") === "true";
 
-    // ✅ Determine limits based on user type
+    // ✅ Determine upload limits
     let limits = CONFIG.limits.guest;
     if (userType === "user" && userId) {
       const { results } = await env.DB.prepare("SELECT plan FROM users WHERE id = ?").bind(userId).all();
@@ -39,7 +41,7 @@ export async function POST(req: Request, env: any) {
       limits = user?.plan === "pro" ? CONFIG.limits.userPro : CONFIG.limits.userFree;
     }
 
-    // ✅ Enforce file size
+    // ✅ Enforce size
     const allowedMaxSize = limits.maxUploadSizeMB * 1024 * 1024;
     if (file.size > allowedMaxSize) {
       return NextResponse.json(
@@ -48,18 +50,17 @@ export async function POST(req: Request, env: any) {
       );
     }
 
-    // ✅ Enforce expiry
+    // ✅ Expiry enforcement
     const finalExpiryHours = Math.min(expiryHours, limits.maxExpiryHours);
 
     // ✅ Upload file to R2
-    const key = `${nanoid(16)}-${file.name}`; // edge-safe ID
+    const key = `${nanoid(16)}-${file.name}`;
     const arrayBuffer = await file.arrayBuffer();
-
     await r2.send(
       new PutObjectCommand({
         Bucket: env.R2_BUCKET,
         Key: key,
-        Body: new Uint8Array(arrayBuffer), // ✅ Buffer-free for Edge runtime
+        Body: new Uint8Array(arrayBuffer),
         ContentType: file.type || "application/octet-stream",
       })
     );
@@ -69,7 +70,7 @@ export async function POST(req: Request, env: any) {
     const createdAt = Date.now();
     const expiresAt = createdAt + finalExpiryHours * 60 * 60 * 1000;
 
-    // ✅ Save metadata to D1
+    // ✅ Save metadata in D1
     await execDB(
       env,
       `INSERT INTO files
@@ -112,7 +113,6 @@ export async function POST(req: Request, env: any) {
       ]
     );
 
-    // ✅ Build response
     const baseUrl = env.BASE_URL || "https://zyncrate.pages.dev";
     const downloadLink = `${baseUrl}/download?key=${encodeURIComponent(key)}`;
 
@@ -125,9 +125,6 @@ export async function POST(req: Request, env: any) {
     });
   } catch (err: any) {
     console.error("🔥 Upload failed:", err);
-    return NextResponse.json(
-      { error: err.message || "Upload failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message || "Upload failed" }, { status: 500 });
   }
 }
