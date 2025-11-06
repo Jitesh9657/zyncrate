@@ -1,7 +1,7 @@
 // app/api/cleanup/route.ts
 import { NextResponse } from "next/server";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { r2 } from "@/lib/r2";
+import { getR2Client } from "@/lib/r2";
 import { queryDB, execDB } from "@/lib/db"; // ✅ use execDB for mutations
 
 export const runtime = "edge"; // ✅ ensures Cloudflare compatibility
