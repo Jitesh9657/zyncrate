@@ -1,6 +1,6 @@
 name = "zyncrate"
 compatibility_date = "2025-01-01"
-pages_build_output_dir = ".vercel/output/static"
+pages_build_output_dir = ".vercel/output"
 
 # === D1 Database Binding ===
 [[d1_databases]]
