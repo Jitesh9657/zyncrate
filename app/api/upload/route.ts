@@ -59,7 +59,7 @@ export async function POST(req: Request, env: any) {
     const r2 = getR2Client(env);
     await r2.send(
       new PutObjectCommand({
-        Bucket: env.R2_BUCKET,
+        Bucket: env.R2_Bucket,
         Key: key,
         Body: new Uint8Array(arrayBuffer),
         ContentType: file.type || "application/octet-stream",

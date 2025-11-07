@@ -12,7 +12,7 @@ export async function GET(req: Request, env: any) {
 
     await r2.send(
       new PutObjectCommand({
-        Bucket: env.R2_BUCKET,
+        Bucket: env.R2_Bucket,
         Key: key,
         Body: body,
         ContentType: "text/plain",
@@ -21,7 +21,7 @@ export async function GET(req: Request, env: any) {
 
     return NextResponse.json({
       success: true,
-      message: `✅ Uploaded test file to ${env.R2_BUCKET}/${key}`,
+      message: `✅ Uploaded test file to ${env.R2_Bucket}/${key}`,
     });
   } catch (err: any) {
     console.error("Test R2 failed:", err);

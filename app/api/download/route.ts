@@ -36,7 +36,7 @@ export async function GET(req: Request, env: any) {
 
         await r2.send(
           new DeleteObjectCommand({
-            Bucket: env.R2_BUCKET,
+            Bucket: env.R2_Bucket,
             Key: file.path || file.key,
           })
         );
@@ -82,7 +82,7 @@ export async function GET(req: Request, env: any) {
 
     // ✅ 6. Retrieve file from R2
     const command = new GetObjectCommand({
-      Bucket: env.R2_BUCKET,
+      Bucket: env.R2_Bucket,
       Key: file.path || file.key,
     });
     const result = await r2.send(command);
@@ -122,7 +122,7 @@ export async function GET(req: Request, env: any) {
       try {
         await r2.send(
           new DeleteObjectCommand({
-            Bucket: env.R2_BUCKET,
+            Bucket: env.R2_Bucket,
             Key: file.path || file.key,
           })
         );

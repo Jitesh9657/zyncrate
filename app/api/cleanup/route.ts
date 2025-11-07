@@ -32,7 +32,7 @@ export async function GET(req: Request, env: any) {
       try {
         await r2.send(
           new DeleteObjectCommand({
-            Bucket: env.R2_BUCKET, // Cloudflare binding
+            Bucket: env.R2_Bucket, // Cloudflare binding
             Key: file.key,
           })
         );
