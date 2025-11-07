@@ -10,7 +10,7 @@ database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
 
 # === R2 Bucket Binding ===
 [[r2_buckets]]
-binding = "R2_BUCKET"
+binding = "R2_Bucket"
 bucket_name = "zyncrate"
 
 # === Environment Variables (fallbacks if not in dashboard) ===
