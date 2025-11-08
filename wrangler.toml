@@ -2,12 +2,13 @@ name = "zyncrate"
 compatibility_date = "2025-01-01"
 
 [build]
-command = "npm run build"
-environment = { NODE_VERSION = "20.18.1" }  # ✅ Forces Node 20 on Cloudflare build
+command = "npm run build && npx open-next@latest build" # 👈 NEW COMMAND
+environment = { NODE_VERSION = "20.18.1" }
 
 [pages]
-pages_build_output_dir = ".next"
-functions = "functions"  # 👈 This line forces Cloudflare to detect your /functions dir
+# Must point to where OpenNext puts the static files
+pages_build_output_dir = ".open-next/assets" # 👈 NEW DIRECTORY
+functions = "functions"
 
 # === D1 Database Binding ===
 [[d1_databases]]
