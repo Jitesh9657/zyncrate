@@ -27,8 +27,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.45.3"
-  }
-}
-"engines": {
+  },
+  "engines": {
   "node": ">=20.18.1"
+}
 }
