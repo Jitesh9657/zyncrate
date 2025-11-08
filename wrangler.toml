@@ -1,6 +1,10 @@
 name = "zyncrate"
 compatibility_date = "2025-01-01"
 
+[build]
+command = "npm run build"
+environment = { NODE_VERSION = "20.18.1" }  # ✅ Forces Node 20 on Cloudflare build
+
 [pages]
 pages_build_output_dir = ".next"
 functions = "functions"  # 👈 This line forces Cloudflare to detect your /functions dir
