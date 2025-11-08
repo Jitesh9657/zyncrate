@@ -1,6 +1,9 @@
 name = "zyncrate"
 compatibility_date = "2025-01-01"
+
+[pages]
 pages_build_output_dir = ".next"
+functions = "functions"  # 👈 This line forces Cloudflare to detect your /functions dir
 
 # === D1 Database Binding ===
 [[d1_databases]]
