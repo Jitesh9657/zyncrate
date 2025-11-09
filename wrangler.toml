@@ -11,19 +11,19 @@ NODE_VERSION = "20.18.1"
 pages_build_output_dir = ".open-next/assets"
 
 # ✅ OpenNext puts serverless functions here
-functions = ".open-next/server-functions"
+# functions = ".open-next/server-functions"
 
 # === D1 Database Binding ===
-[[d1_databases]]
-binding = "DB"
-database_name = "zyncrate_db"
-database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
+# [[d1_databases]]
+#binding = "DB"
+#database_name = "zyncrate_db"
+#database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
 
 # === R2 Bucket Binding ===
-[[r2_buckets]]
-binding = "R2_Bucket"
-bucket_name = "zyncrate"
+#[[r2_buckets]]
+#binding = "R2_Bucket"
+#bucket_name = "zyncrate"
 
 # === Environment Variables ===
-[vars]
-BASE_URL = "https://zyncrate.pages.dev"
+#[vars]
+#BASE_URL = "https://zyncrate.pages.dev"
