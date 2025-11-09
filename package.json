@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "cf-deploy": "next-on-pages",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.919.0",

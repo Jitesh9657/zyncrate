@@ -10,7 +10,11 @@ interface FileInfo {
   max_downloads: number;
 }
 
-export default function DownloadPage({ params }: { params: { key: string } }) {
+interface PageProps {
+  params: { key: string };
+}
+
+export default function DownloadPage({ params }: PageProps) {
   const [file, setFile] = useState<FileInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);

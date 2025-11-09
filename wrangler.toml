@@ -1,0 +1,21 @@
+name = "zyncrate"
+compatibility_date = "2025-01-01"
+
+[build]
+command = "npm run build && npx @cloudflare/next-on-pages"
+
+[pages]
+pages_build_output_dir = ".vercel/output/static"
+functions = ".vercel/output/functions"
+
+[[r2_buckets]]
+binding = "R2_Bucket"
+bucket_name = "zyncrate"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zyncrate_db"
+database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
+
+[vars]
+BASE_URL = "https://zyncrate.pages.dev"
