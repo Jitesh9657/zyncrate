@@ -1,0 +1,18 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/cleanup/route": "app-edge-has-no-entrypoint",
+  "/api/download-info/route": "app-edge-has-no-entrypoint",
+  "/api/download/route": "app-edge-has-no-entrypoint",
+  "/api/file-info/route": "app-edge-has-no-entrypoint",
+  "/api/guest/session/route": "app-edge-has-no-entrypoint",
+  "/api/test-r2/route": "app-edge-has-no-entrypoint",
+  "/api/upload/route": "app-edge-has-no-entrypoint",
+  "/api/user/login/route": "app-edge-has-no-entrypoint",
+  "/api/user/register/route": "app-edge-has-no-entrypoint",
+  "/download/[key]/page": "app/download/[key]/page.js",
+  "/download/page": "app/download/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/page": "app/page.js",
+  "/upload/page": "app/upload/page.js"
+}

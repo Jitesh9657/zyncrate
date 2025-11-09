@@ -2,13 +2,16 @@ name = "zyncrate"
 compatibility_date = "2025-01-01"
 
 [build]
-command = "npm run build && npx open-next@latest build" # 👈 NEW COMMAND
-environment = { NODE_VERSION = "20.18.1" }
+command = "npm run open"
+[build.environment]
+NODE_VERSION = "20.18.1"
 
 [pages]
-# Must point to where OpenNext puts the static files
-pages_build_output_dir = ".open-next/assets" # 👈 NEW DIRECTORY
-functions = "functions"
+# ✅ OpenNext puts static assets here
+pages_build_output_dir = ".open-next/assets"
+
+# ✅ OpenNext puts serverless functions here
+functions = ".open-next/server-functions"
 
 # === D1 Database Binding ===
 [[d1_databases]]
@@ -21,6 +24,6 @@ database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
 binding = "R2_Bucket"
 bucket_name = "zyncrate"
 
-# === Environment Variables (fallbacks if not in dashboard) ===
+# === Environment Variables ===
 [vars]
 BASE_URL = "https://zyncrate.pages.dev"
