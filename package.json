@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "open": "open-next build",
+    "open": "open-next build --adapter cloudflare",
     "start": "next start",
     "lint": "eslint"
   },
