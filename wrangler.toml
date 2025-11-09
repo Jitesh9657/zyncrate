@@ -1,7 +1,8 @@
 name = "zyncrate"
 compatibility_date = "2025-01-01"
 
-[build]
-command = "npm run open"
-[build.environment]
-NODE_VERSION = "20.18.1"
+[pages]
+# This explicitly tells Pages where to find the static files and the worker
+pages_build_output_dir = ".open-next" 
+
+# Note: The [build] section is often what causes the conflict on Pages, so we omit it.
