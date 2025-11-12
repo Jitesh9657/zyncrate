@@ -1,10 +1,8 @@
-// app/api/download/route.ts
-import { NextResponse } from "next/server";
-import { GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { getR2Client } from "@/lib/r2";
-import { queryDB, execDB } from "@/lib/db"; // ✅ use execDB for write queries
+export const runtime = "edge";
 
-export const runtime = "edge"; // ✅ Required for Cloudflare Pages (edge environment)
+import { NextResponse } from "next/server";
+import { getFromR2, deleteFromR2 } from "@/lib/r2";
+import { queryDB, execDB } from "@/lib/db";
 
 export async function GET(req: Request, env: any) {
   try {
@@ -17,7 +15,7 @@ export async function GET(req: Request, env: any) {
       return NextResponse.json({ error: "Missing key" }, { status: 400 });
     }
 
-    // ✅ 1. Fetch file metadata from D1
+    // ✅ 1. Fetch file metadata
     const { results } = await queryDB(
       env,
       "SELECT * FROM files WHERE key = ? AND is_deleted = 0",
@@ -28,27 +26,18 @@ export async function GET(req: Request, env: any) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
-    const r2 = getR2Client(env);
-    
     // ✅ 2. Handle expiry
     if (file.expires_at && Date.now() > Number(file.expires_at)) {
-      try {        
-
-        await r2.send(
-          new DeleteObjectCommand({
-            Bucket: env.R2_Bucket,
-            Key: file.path || file.key,
-          })
-        );
+      try {
+        await deleteFromR2(env.R2_BUCKET_NAME!, file.path || file.key);
       } catch (e) {
         console.warn("Failed to delete expired file from R2:", e);
       }
-
       await execDB(env, "UPDATE files SET is_deleted = 1 WHERE key = ?", [key]);
       return NextResponse.json({ error: "File expired" }, { status: 410 });
     }
 
-    // ✅ 3. Info-only preview (no download)
+    // ✅ 3. Info-only mode
     if (infoOnly === "true") {
       return NextResponse.json({
         key: file.key,
@@ -80,17 +69,16 @@ export async function GET(req: Request, env: any) {
       );
     }
 
-    // ✅ 6. Retrieve file from R2
-    const command = new GetObjectCommand({
-      Bucket: env.R2_Bucket,
-      Key: file.path || file.key,
-    });
-    const result = await r2.send(command);
+    // ✅ 6. Get file stream from R2
+    const fileStream = await getFromR2(env.R2_BUCKET_NAME!, file.path || file.key);
+    if (!fileStream) {
+      return NextResponse.json({ error: "File missing in R2" }, { status: 404 });
+    }
 
     // ✅ 7. Increment download count
     await execDB(env, "UPDATE files SET download_count = download_count + 1 WHERE key = ?", [key]);
 
-    // ✅ 8. Log analytics
+    // ✅ 8. Insert analytics record
     try {
       await execDB(
         env,
@@ -111,7 +99,7 @@ export async function GET(req: Request, env: any) {
       console.warn("⚠️ Analytics insert failed:", e);
     }
 
-    // ✅ 9. Check one-time or max downloads reached
+    // ✅ 9. Check one-time or max downloads
     const { results: updatedFiles } = await queryDB(env, "SELECT * FROM files WHERE key = ?", [key]);
     const fileAfter = updatedFiles?.[0];
     const needsDelete =
@@ -120,31 +108,22 @@ export async function GET(req: Request, env: any) {
 
     if (needsDelete) {
       try {
-        await r2.send(
-          new DeleteObjectCommand({
-            Bucket: env.R2_Bucket,
-            Key: file.path || file.key,
-          })
-        );
+        await deleteFromR2(env.R2_BUCKET_NAME!, file.path || file.key);
       } catch (e) {
-        console.warn("Failed to delete object from R2 after download:", e);
+        console.warn("Failed to delete object after download:", e);
       }
       await execDB(env, "UPDATE files SET is_deleted = 1 WHERE key = ?", [key]);
     }
 
-    // ✅ 10. Return the file stream to client
+    // ✅ 10. Return file to user
     const headers: Record<string, string> = {
-      "Content-Type": result.ContentType || file.mime_type || "application/octet-stream",
+      "Content-Type": file.mime_type || "application/octet-stream",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(file.file_name)}"`,
     };
 
-    const contentLength =
-      result.ContentLength?.toString() ||
-      (file.file_size ? String(file.file_size) : undefined);
+    if (file.file_size) headers["Content-Length"] = String(file.file_size);
 
-    if (contentLength) headers["Content-Length"] = contentLength;
-
-    return new Response(result.Body as ReadableStream, { headers });
+    return new Response(fileStream as ReadableStream, { headers });
   } catch (error: any) {
     console.error("🔥 Download error:", error);
     return NextResponse.json(

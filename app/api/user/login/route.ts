@@ -1,24 +1,25 @@
-// app/api/user/login/route.ts
+export const runtime = "edge";
+
 import { NextResponse } from "next/server";
 import { queryDB, execDB } from "@/lib/db";
 import { nanoid } from "nanoid";
-
-export const runtime = "edge"; // ✅ Cloudflare Edge-compatible
 
 type ReqBody = {
   email?: string;
   password?: string;
 };
 
-// ✅ Edge-safe password verification (SHA-256)
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
+// ✅ Edge-native password verification using Web Crypto API
+async function verifyPassword(
+  plain: string,
+  storedHash: string
+): Promise<boolean> {
+  const data = new TextEncoder().encode(plain);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hexHash = Array.from(new Uint8Array(hashBuffer))
+  const computedHash = Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  return hexHash === storedHash;
+  return computedHash === storedHash;
 }
 
 export async function POST(req: Request, env: any) {
@@ -29,12 +30,12 @@ export async function POST(req: Request, env: any) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: "Email and password required." },
+        { error: "Email and password are required." },
         { status: 400 }
       );
     }
 
-    // ✅ Fetch user from Cloudflare D1
+    // ✅ Query D1 for user
     const { results } = await queryDB(
       env,
       "SELECT id, email, password_hash, plan FROM users WHERE email = ?",
@@ -49,40 +50,44 @@ export async function POST(req: Request, env: any) {
       );
     }
 
-    // ✅ Verify password
+    // ✅ Verify password securely
     const isValid = await verifyPassword(password, user.password_hash);
     if (!isValid) {
-      return NextResponse.json({ error: "Invalid password." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Invalid password." },
+        { status: 401 }
+      );
     }
 
-    // ✅ Generate a new auth token
-    const auth_token = nanoid(32);
+    // ✅ Issue auth token
+    const authToken = nanoid(32);
     await execDB(env, "UPDATE users SET auth_token = ? WHERE id = ?", [
-      auth_token,
+      authToken,
       user.id,
     ]);
 
-    // ✅ Build response
+    // ✅ Prepare response
     const response = NextResponse.json({
       success: true,
       user: { id: user.id, email: user.email, plan: user.plan },
-      auth_token,
-      message: "Login successful — token issued.",
+      auth_token: authToken,
+      message: "✅ Login successful — token issued.",
     });
 
-    // ✅ Set secure cookie
-    response.cookies.set("auth_token", auth_token, {
+    // ✅ Secure cookie setup
+    response.cookies.set("auth_token", authToken, {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      secure: true, // Cloudflare Pages always serves HTTPS
       path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 
     return response;
-  } catch (error: any) {
-    console.error("🔥 Login error:", error);
+  } catch (err: any) {
+    console.error("🔥 Login error:", err);
     return NextResponse.json(
-      { error: error.message || "Failed to login." },
+      { error: err.message || "Failed to login." },
       { status: 500 }
     );
   }

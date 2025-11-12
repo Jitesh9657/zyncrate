@@ -1,46 +1,53 @@
-// app/api/guest/session/route.ts
+export const runtime = "edge";
+
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { execDB } from "@/lib/db"; // ✅ use execDB for INSERT/UPDATE/DELETE
-
-export const runtime = "edge"; // ✅ Required for Cloudflare Pages / Edge Runtime
+import { execDB } from "@/lib/db";
 
 export async function GET(req: Request, env: any) {
   try {
-    // ✅ Generate identifiers
-    const session_id = nanoid(16);
-    const auth_token = nanoid(32);
     const now = Date.now();
-    const expires_at = now + 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    // ✅ Generate unique session + token
+    const sessionId = nanoid(16);
+    const authToken = nanoid(32);
 
     // ✅ Capture request metadata
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    const ua = req.headers.get("user-agent") || "unknown";
+    const ipAddress = req.headers.get("x-forwarded-for") ?? "unknown";
+    const userAgent = req.headers.get("user-agent") ?? "unknown";
 
-    // ✅ Insert guest into D1
+    // ✅ Insert into Cloudflare D1 (guests table)
     await execDB(
       env,
       `
-        INSERT INTO guests (temp_token, created_at, expires_at, ip_address, user_agent, last_activity)
-        VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO guests (
+        temp_token,
+        created_at,
+        expires_at,
+        ip_address,
+        user_agent,
+        last_activity
+      ) VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [auth_token, now, expires_at, ip, ua, now]
+      [authToken, now, expiresAt, ipAddress, userAgent, now]
     );
 
-    // ✅ Build response body
+    // ✅ Build and return response
     const response = NextResponse.json({
       success: true,
-      session_id,
-      auth_token,
-      expires_at,
+      session_id: sessionId,
+      auth_token: authToken,
+      expires_at: expiresAt,
       message: "Guest session created successfully.",
     });
 
-    // ✅ Set persistent guest cookie (for 7 days)
-    response.cookies.set("guest_token", auth_token, {
+    // ✅ Set secure guest cookie
+    response.cookies.set("guest_token", authToken, {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      secure: true, // ⚠️ ensures HTTPS only
+      maxAge: 7 * 24 * 60 * 60,
       path: "/",
     });
 

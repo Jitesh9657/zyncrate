@@ -1,24 +1,21 @@
-// app/api/upload/route.ts
-import { NextResponse } from "next/server";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { getR2Client } from "@/lib/r2";
-import { loadConfig } from "@/lib/config";   // ✅ fixed import
-import { execDB } from "@/lib/db";           // ✅ D1 helper
-import { nanoid } from "nanoid";             // ✅ edge-safe id generator
+export const runtime = "edge";
 
-export const runtime = "edge"; // ✅ Cloudflare Pages compatible (Edge Runtime)
+import { NextResponse } from "next/server";
+import { loadConfig } from "@/lib/config";
+import { execDB } from "@/lib/db";
+import { nanoid } from "nanoid";
 
 export async function POST(req: Request, env: any) {
-  console.log("⏳ Upload route hit (Cloudflare Edge)");
-
-  // ✅ dynamically load config (since config values come from D1)
-  const CONFIG = await loadConfig(env);
-
   try {
+    console.log("⏳ Upload route hit (Cloudflare Edge)");
+
+    // ✅ Load configuration
+    const CONFIG = await loadConfig(env);
+
     // ✅ Identify uploader
     const userType = req.headers.get("x-user-type") || "guest";
-    const userId = req.headers.get("x-user-id") || null;
-    const guestId = req.headers.get("x-guest-id") || null;
+    const userId = req.headers.get("x-user-id");
+    const guestId = req.headers.get("x-guest-id");
 
     // ✅ Parse incoming form data
     const formData = await req.formData();
@@ -29,21 +26,23 @@ export async function POST(req: Request, env: any) {
 
     const expiryHours = Number(formData.get("expiry_hours")) || 24;
     const maxDownloads = Number(formData.get("max_downloads")) || 5;
-    const locked = formData.get("locked") === "1" || formData.get("locked") === "true";
+    const locked = ["1", "true"].includes(String(formData.get("locked")));
     const lockKey = (formData.get("lock_key") as string) || null;
-    const oneTime = formData.get("one_time") === "1" || formData.get("one_time") === "true";
+    const oneTime = ["1", "true"].includes(String(formData.get("one_time")));
 
-    // ✅ Determine upload limits
+    // ✅ Determine plan limits
     let limits = CONFIG.limits.guest;
     if (userType === "user" && userId) {
-      const { results } = await env.DB.prepare("SELECT plan FROM users WHERE id = ?").bind(userId).all();
-      const user = results?.[0];
-      limits = user?.plan === "pro" ? CONFIG.limits.userPro : CONFIG.limits.userFree;
+      const { results } = await env.DB.prepare(
+        "SELECT plan FROM users WHERE id = ?"
+      ).bind(userId).all();
+      const plan = results?.[0]?.plan;
+      limits = plan === "pro" ? CONFIG.limits.userPro : CONFIG.limits.userFree;
     }
 
-    // ✅ Enforce size
-    const allowedMaxSize = limits.maxUploadSizeMB * 1024 * 1024;
-    if (file.size > allowedMaxSize) {
+    // ✅ Enforce size limit
+    const maxSizeBytes = limits.maxUploadSizeMB * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
       return NextResponse.json(
         { error: `File too large. Max allowed: ${limits.maxUploadSizeMB} MB` },
         { status: 413 }
@@ -53,25 +52,20 @@ export async function POST(req: Request, env: any) {
     // ✅ Expiry enforcement
     const finalExpiryHours = Math.min(expiryHours, limits.maxExpiryHours);
 
-    // ✅ Upload file to R2
+    // ✅ Upload directly to R2 (no AWS SDK)
     const key = `${nanoid(16)}-${file.name}`;
-    const arrayBuffer = await file.arrayBuffer();
-    const r2 = getR2Client(env);
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: env.R2_Bucket,
-        Key: key,
-        Body: new Uint8Array(arrayBuffer),
-        ContentType: file.type || "application/octet-stream",
-      })
-    );
+    const body = await file.arrayBuffer();
+
+    await env.R2.put(key, body, {
+      httpMetadata: { contentType: file.type || "application/octet-stream" },
+    });
 
     console.log("✅ Uploaded to R2:", key);
 
+    // ✅ Record metadata in D1
     const createdAt = Date.now();
     const expiresAt = createdAt + finalExpiryHours * 60 * 60 * 1000;
 
-    // ✅ Save metadata in D1
     await execDB(
       env,
       `INSERT INTO files
@@ -98,10 +92,11 @@ export async function POST(req: Request, env: any) {
       ]
     );
 
-    // ✅ Record analytics
+    // ✅ Log analytics
     await execDB(
       env,
-      `INSERT INTO analytics (file_key, user_id, guest_session_id, action, timestamp, ip_address, user_agent)
+      `INSERT INTO analytics
+         (file_key, user_id, guest_session_id, action, timestamp, ip_address, user_agent)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         key,
@@ -109,8 +104,8 @@ export async function POST(req: Request, env: any) {
         userType === "guest" ? guestId : null,
         "upload",
         Date.now(),
-        req.headers.get("x-forwarded-for") || null,
-        req.headers.get("user-agent") || null,
+        req.headers.get("x-forwarded-for"),
+        req.headers.get("user-agent"),
       ]
     );
 
@@ -126,6 +121,9 @@ export async function POST(req: Request, env: any) {
     });
   } catch (err: any) {
     console.error("🔥 Upload failed:", err);
-    return NextResponse.json({ error: err.message || "Upload failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Upload failed" },
+      { status: 500 }
+    );
   }
 }

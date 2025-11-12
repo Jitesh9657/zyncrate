@@ -1,19 +1,14 @@
-// app/api/cleanup/route.ts
-import { NextResponse } from "next/server";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { getR2Client } from "@/lib/r2";
-import { queryDB, execDB } from "@/lib/db"; // ✅ use execDB for mutations
+export const runtime = "edge";
 
-export const runtime = "edge"; // ✅ ensures Cloudflare compatibility
+import { NextResponse } from "next/server";
+import { deleteFromR2 } from "@/lib/r2";
+import { queryDB, execDB } from "@/lib/db"; // D1 helpers
 
 export async function GET(req: Request, env: any) {
   try {
     const now = Date.now();
 
-    // ✅ Initialize R2 client (runtime-safe)
-    const r2 = getR2Client(env);
-
-    // ✅ Get expired files using D1
+    // ✅ Find expired files in D1
     const { results: expiredFiles } = await queryDB(
       env,
       `SELECT id, key FROM files WHERE expires_at IS NOT NULL AND expires_at < ?`,
@@ -27,21 +22,16 @@ export async function GET(req: Request, env: any) {
       });
     }
 
-    // ✅ Delete from R2
+    // ✅ Delete each expired file from R2
     for (const file of expiredFiles) {
       try {
-        await r2.send(
-          new DeleteObjectCommand({
-            Bucket: env.R2_Bucket, // Cloudflare binding
-            Key: file.key,
-          })
-        );
+        await deleteFromR2(env.R2_BUCKET_NAME!, file.key);
       } catch (err) {
         console.error("⚠️ Failed to delete R2 object:", file.key, err);
       }
     }
 
-    // ✅ Delete from D1
+    // ✅ Remove file records from D1
     const ids = expiredFiles.map((f) => f.id);
     const placeholders = ids.map(() => "?").join(",");
     await execDB(env, `DELETE FROM files WHERE id IN (${placeholders})`, ids);

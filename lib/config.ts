@@ -75,6 +75,4 @@ export async function loadConfig(env: any) {
  * Helper to get runtime config easily in routes:
  * `const CONFIG = await getConfig(env);`
  */
-export async function getConfig(env: any) {
-  return await loadConfig(env);
-}
+export const getConfig = loadConfig;

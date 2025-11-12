@@ -1,30 +1,27 @@
-import { NextResponse } from "next/server";
-import { getR2Client } from "@/lib/r2";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-
 export const runtime = "edge";
 
-export async function GET(req: Request, env: any) {
-  try {
-    const r2 = getR2Client(env);
-    const key = `test-${Date.now()}.txt`;
-    const body = `Cloudflare test file at ${new Date().toISOString()}`;
+import { NextResponse } from "next/server";
 
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: env.R2_Bucket,
-        Key: key,
-        Body: body,
-        ContentType: "text/plain",
-      })
-    );
+export async function GET(_req: Request, env: any) {
+  try {
+    const key = `test-${Date.now()}.txt`;
+    const content = `Cloudflare R2 test file at ${new Date().toISOString()}`;
+
+    // ✅ Use R2 bucket binding directly (no AWS SDK)
+    await env.R2.put(key, content, {
+      httpMetadata: { contentType: "text/plain" },
+    });
 
     return NextResponse.json({
       success: true,
-      message: `✅ Uploaded test file to ${env.R2_Bucket}/${key}`,
+      message: `✅ Uploaded test file to ${env.R2_BUCKET_NAME || "R2"}/${key}`,
+      key,
     });
   } catch (err: any) {
-    console.error("Test R2 failed:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("🔥 R2 test failed:", err);
+    return NextResponse.json(
+      { error: err.message || "Failed to upload test file" },
+      { status: 500 }
+    );
   }
 }

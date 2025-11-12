@@ -1,8 +1,7 @@
-// app/api/file-info/route.ts
+export const runtime = "edge";
+
 import { NextResponse } from "next/server";
 import { queryDB } from "@/lib/db";
-
-export const runtime = "edge"; // ✅ Required for Cloudflare Pages / Edge Functions
 
 export async function GET(req: Request, env: any) {
   try {
@@ -13,15 +12,16 @@ export async function GET(req: Request, env: any) {
       return NextResponse.json({ error: "Missing key" }, { status: 400 });
     }
 
-    // ✅ Fetch single file record from Cloudflare D1
+    // ✅ Fetch file record from D1 (Cloudflare SQLite)
     const { results } = await queryDB(
       env,
-      `SELECT 
-         id, key, file_name, file_size, mime_type, path, 
-         created_at, expires_at, download_count, max_downloads, 
-         one_time, is_deleted, locked, lock_key, user_id, guest_session_id
-       FROM files 
-       WHERE key = ? AND is_deleted = 0`,
+      `
+      SELECT
+        key, file_name, file_size, mime_type, created_at, expires_at,
+        download_count, max_downloads, one_time, locked
+      FROM files
+      WHERE key = ? AND is_deleted = 0
+      `,
       [key]
     );
 
@@ -30,21 +30,21 @@ export async function GET(req: Request, env: any) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
-    // ✅ Clean output: remove sensitive or internal fields if needed
-    const safeData = {
+    // ✅ Sanitize + normalize data for edge clients
+    const safeFile = {
       key: file.key,
       file_name: file.file_name,
-      file_size: file.file_size,
-      mime_type: file.mime_type,
-      created_at: file.created_at,
-      expires_at: file.expires_at,
-      download_count: file.download_count,
-      max_downloads: file.max_downloads,
-      one_time: file.one_time ? 1 : 0,
-      locked: file.locked ? 1 : 0,
+      file_size: Number(file.file_size) || 0,
+      mime_type: file.mime_type || "application/octet-stream",
+      created_at: file.created_at ? Number(file.created_at) : null,
+      expires_at: file.expires_at ? Number(file.expires_at) : null,
+      download_count: Number(file.download_count) || 0,
+      max_downloads: file.max_downloads ? Number(file.max_downloads) : null,
+      one_time: !!file.one_time,
+      locked: !!file.locked,
     };
 
-    return NextResponse.json({ success: true, file: safeData });
+    return NextResponse.json({ success: true, file: safeFile });
   } catch (error: any) {
     console.error("⚠️ File info error:", error);
     return NextResponse.json(

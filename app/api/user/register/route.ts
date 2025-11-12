@@ -1,19 +1,17 @@
-// app/api/user/register/route.ts
+export const runtime = "edge";
+
 import { NextResponse } from "next/server";
 import { queryDB, execDB } from "@/lib/db";
 import { nanoid } from "nanoid";
-
-export const runtime = "edge"; // ✅ Cloudflare Edge runtime
 
 type ReqBody = {
   email?: string;
   password?: string;
 };
 
-// ✅ Edge-safe SHA-256 password hashing
+// ✅ Edge-safe SHA-256 hashing
 async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
+  const data = new TextEncoder().encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -28,12 +26,12 @@ export async function POST(req: Request, env: any) {
 
     if (!email || !password || password.length < 6) {
       return NextResponse.json(
-        { error: "Email and password (min 6 chars) required." },
+        { error: "Email and password (min 6 characters) required." },
         { status: 400 }
       );
     }
 
-    // ✅ Check for existing account
+    // ✅ Check for existing user
     const { results: existing } = await queryDB(
       env,
       "SELECT id FROM users WHERE email = ?",
@@ -46,45 +44,46 @@ export async function POST(req: Request, env: any) {
       );
     }
 
-    // ✅ Hash password and create user
-    const password_hash = await hashPassword(password);
-    const auth_token = nanoid(32);
-    const now = Date.now();
+    // ✅ Create new user
+    const passwordHash = await hashPassword(password);
+    const authToken = nanoid(32);
+    const createdAt = Date.now();
 
     await execDB(
       env,
       `INSERT INTO users (email, password_hash, created_at, auth_token, plan)
        VALUES (?, ?, ?, ?, 'free')`,
-      [email, password_hash, now, auth_token]
+      [email, passwordHash, createdAt, authToken]
     );
 
-    // ✅ Retrieve the inserted user id
+    // ✅ Retrieve new user ID
     const { results: [newUser] = [] } = await queryDB(
       env,
       "SELECT id FROM users WHERE email = ?",
       [email]
     );
 
-    // ✅ Build response with cookie
-    const res = NextResponse.json({
+    // ✅ Return response with secure cookie
+    const response = NextResponse.json({
       success: true,
       user: { id: newUser?.id, email, plan: "free" },
-      auth_token,
-      message: "Account created successfully.",
+      auth_token: authToken,
+      message: "🎉 Account created successfully.",
     });
 
-    res.cookies.set("auth_token", auth_token, {
+    response.cookies.set("auth_token", authToken, {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      secure: true, // HTTPS-only cookies (Cloudflare default)
       path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 
-    return res;
-  } catch (error: any) {
-    console.error("🔥 Register error:", error);
+    return response;
+  } catch (err: any) {
+    console.error("🔥 Register error:", err);
     return NextResponse.json(
-      { error: error.message || "Failed to register." },
+      { error: err.message || "Failed to register user." },
       { status: 500 }
     );
   }
