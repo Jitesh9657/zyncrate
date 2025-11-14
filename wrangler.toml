@@ -1,10 +1,13 @@
 name = "zyncrate"
 compatibility_date = "2024-11-05"
 
-# Pages output (static)
 [pages]
 pages_build_output_dir = "public"
-functions = "functions"
+
+# Tell Cloudflare to include the functions folder in the build
+[build]
+command = ""
+include = ["functions"]
 
 [[r2_buckets]]
 binding = "R2"
