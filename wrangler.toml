@@ -1,14 +1,12 @@
 name = "zyncrate"
 compatibility_date = "2024-11-05"
 
-# Pages project config
-[site]
-bucket = "public"        # this replaces pages_build_output_dir
+# REQUIRED for Pages in Wrangler 4.48+
+pages_build_output_dir = "public"
+pages_build_output_dir_clean = false
 
-[build]
-command = ""             # no build step
-watch_dir = "functions"  # ensure functions trigger build
-upload = { format = "modules" }
+# Optional but recommended
+pages_functions_build_dir = "functions"
 
 [[r2_buckets]]
 binding = "R2"
