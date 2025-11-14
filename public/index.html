@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zyncrate – Temporary File Upload</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+    .box { border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+    .btn { background:black; color:white; padding:10px 16px; border:none; border-radius:6px; cursor:pointer; }
+    .input { width: 100%; padding:8px; margin-top:6px; margin-bottom:16px; }
+    .ads { margin: 20px 0; padding:10px 0; background:#f9f9f9; text-align:center; border:1px dashed #ccc; }
+    .hidden { display:none; }
+  </style>
+</head>
+
+<body>
+
+<h2>Upload File (Expires in 1–24 hours)</h2>
+
+<!-- ADS AREA TOP -->
+<div class="ads">Your Ad Code Here</div>
+
+<div class="box">
+  <input type="file" id="file" class="input">
+
+  <label>Expiry:</label>
+  <select id="expiryHours" class="input">
+    <option value="1">1 hour</option>
+    <option value="6">6 hours</option>
+    <option value="12">12 hours</option>
+    <option value="24" selected>24 hours</option>
+  </select>
+
+  <label>Max Downloads:</label>
+  <select id="maxDownloads" class="input">
+    <option value="0">Unlimited</option>
+    <option value="1">1 Download</option>
+    <option value="3">3 Downloads</option>
+    <option value="5">5 Downloads</option>
+  </select>
+
+  <label>Download Key (Optional):</label>
+  <input type="text" id="key" class="input" placeholder="Set a key (optional)">
+
+  <label>
+    <input type="checkbox" id="one_time"> One-time download (auto-deletes after first download)
+  </label>
+
+  <br><br>
+  <button class="btn" id="uploadBtn">Upload</button>
+
+  <div id="result" style="margin-top:20px; font-weight:bold;"></div>
+</div>
+
+<!-- ADS AREA BOTTOM -->
+<div class="ads">Your Ad Code Here</div>
+
+<script>
+document.getElementById("uploadBtn").onclick = async () => {
+  const file = document.getElementById("file").files[0];
+  if (!file) return alert("Select a file first");
+
+  const expiryHours = Number(document.getElementById("expiryHours").value);
+  const maxDownloads = Number(document.getElementById("maxDownloads").value);
+  const key = document.getElementById("key").value;
+  const oneTime = document.getElementById("one_time").checked ? 1 : 0;
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("expiryHours", expiryHours);
+  form.append("maxDownloads", maxDownloads);
+  form.append("key", key);
+  form.append("one_time", oneTime);
+
+  const res = await fetch("/functions/upload", {
+    method: "POST",
+    body: form
+  }).then(r => r.json()).catch(err => {
+    document.getElementById("result").innerHTML = "❌ Upload failed — network error";
+  });
+
+  if (!res || !res.success) {
+    document.getElementById("result").innerHTML = 
+      "❌ Upload failed — please try again.";
+    return;
+  }
+
+  document.getElementById("result").innerHTML = `
+    File uploaded!<br>
+    <a href="${res.downloadUrl}">${location.origin}${res.downloadUrl}</a>
+  `;
+};
+</script>
+
+
+</body>
+</html>

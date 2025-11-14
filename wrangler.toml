@@ -1,15 +1,13 @@
 name = "zyncrate"
-compatibility_date = "2025-01-01"
+compatibility_date = "2024-11-05"
 
-[build]
-command = "npm run build && npx @cloudflare/next-on-pages"
-
+# Pages output (static)
 [pages]
-pages_build_output_dir = ".vercel/output/static"
-functions = ".vercel/output/functions"
+pages_build_output_dir = "public"
+functions = "functions"
 
 [[r2_buckets]]
-binding = "R2_Bucket"
+binding = "R2"
 bucket_name = "zyncrate"
 
 [[d1_databases]]

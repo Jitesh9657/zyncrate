@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zyncrate – Download File</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin:auto; padding:20px; }
+    .box { border:1px solid #ddd; padding:20px; border-radius:8px; margin-top:20px; }
+    .btn { background:black; color:white; padding:10px 16px; border:none; border-radius:6px; cursor:pointer; }
+    .input { width:100%; padding:8px; margin-top:10px; }
+    .ads { margin:20px 0; padding:10px 0; background:#f9f9f9; text-align:center; border:1px dashed #ccc; }
+  </style>
+</head>
+
+<body>
+
+<h2>Download File</h2>
+
+<div class="ads">Your Ad Here</div>
+
+<div id="message" class="box">Checking file…</div>
+<div id="downloadBox" class="box" style="display:none;">
+  <h3 id="fileName"></h3>
+  <p id="fileInfo"></p>
+
+  <div id="keyBox" style="display:none;">
+    <input id="keyInput" class="input" type="text" placeholder="Enter key">
+    <button id="keySubmit" class="btn">Unlock</button>
+  </div>
+
+  <button id="downloadBtn" class="btn" style="display:none;">Download</button>
+</div>
+
+<div class="ads">Your Ad Here</div>
+
+<script>
+const url = new URL(location.href);
+const id = url.searchParams.get("id");
+
+let fileInfo = null;   // <-- STORE INFO HERE
+
+if (!id) {
+  document.getElementById("message").innerText = "Invalid link";
+  throw new Error("Missing id");
+}
+
+async function init() {
+  const res = await fetch(`/functions/download?id=${id}`);
+  fileInfo = await res.json();   // <-- SAVE INFO
+
+  const msg = document.getElementById("message");
+  const box = document.getElementById("downloadBox");
+
+  if (fileInfo.expired) {
+    msg.innerText = "❌ File expired.";
+    return;
+  }
+
+  if (fileInfo.downloadsExceeded) {
+    msg.innerText = "❌ This file has reached its download limit.";
+    return;
+  }
+
+  msg.style.display = "none";
+  box.style.display = "block";
+  document.getElementById("fileName").innerText = fileInfo.fileName;
+  document.getElementById("fileInfo").innerText = 
+    `Size: ${(fileInfo.size / 1024).toFixed(1)} KB`;
+
+  if (fileInfo.requiresKey) {
+    document.getElementById("keyBox").style.display = "block";
+  } else {
+    document.getElementById("downloadBtn").style.display = "block";
+  }
+}
+
+// Key submit handler
+document.getElementById("keySubmit").onclick = async () => {
+  const key = document.getElementById("keyInput").value.trim();
+  if (!key) return alert("Enter a key");
+
+  const json = await fetch("/functions/key-verify", {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ id, key })
+  }).then(r => r.json());
+
+  if (!json.ok) {
+    alert("Invalid key");
+    return;
+  }
+
+  document.getElementById("keyBox").style.display = "none";
+  document.getElementById("downloadBtn").style.display = "block";
+};
+
+// Actual download
+document.getElementById("downloadBtn").onclick = async () => {
+  const key = document.getElementById("keyInput")?.value;
+
+  const response = await fetch("/functions/download", {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ id, key })
+  });
+
+  if (!response.ok) {
+    alert("Download failed: " + (await response.text()));
+    return;
+  }
+
+  const blob = await response.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = fileInfo.fileName || "file";  // <-- CORRECT FILENAME
+  a.click();
+};
+
+init();
+</script>
+
+</body>
+</html>
