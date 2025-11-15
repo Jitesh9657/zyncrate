@@ -39,7 +39,7 @@
 const url = new URL(location.href);
 const id = url.searchParams.get("id");
 
-let fileInfo = null;   // <-- STORE INFO HERE
+let fileInfo = null; // ← store metadata globally
 
 if (!id) {
   document.getElementById("message").innerText = "Invalid link";
@@ -47,27 +47,26 @@ if (!id) {
 }
 
 async function init() {
-  const res = await fetch(`/functions/download?id=${id}`);
-  fileInfo = await res.json();   // <-- SAVE INFO
+  const res = await fetch(`/download?id=${id}`);
+  fileInfo = await res.json(); // ← saved here
 
   const msg = document.getElementById("message");
   const box = document.getElementById("downloadBox");
 
   if (fileInfo.expired) {
-    msg.innerText = "❌ File expired.";
+    msg.innerText = "File expired.";
     return;
   }
 
   if (fileInfo.downloadsExceeded) {
-    msg.innerText = "❌ This file has reached its download limit.";
+    msg.innerText = "This file has reached its download limit.";
     return;
   }
 
   msg.style.display = "none";
   box.style.display = "block";
   document.getElementById("fileName").innerText = fileInfo.fileName;
-  document.getElementById("fileInfo").innerText = 
-    `Size: ${(fileInfo.size / 1024).toFixed(1)} KB`;
+  document.getElementById("fileInfo").innerText = `Size: ${(fileInfo.size / 1024).toFixed(1)} KB`;
 
   if (fileInfo.requiresKey) {
     document.getElementById("keyBox").style.display = "block";
@@ -81,13 +80,13 @@ document.getElementById("keySubmit").onclick = async () => {
   const key = document.getElementById("keyInput").value.trim();
   if (!key) return alert("Enter a key");
 
-  const json = await fetch("/functions/key-verify", {
+  const res = await fetch("/key-verify", {
     method: "POST",
     headers: { "Content-Type":"application/json" },
     body: JSON.stringify({ id, key })
   }).then(r => r.json());
 
-  if (!json.ok) {
+  if (!res.ok) {
     alert("Invalid key");
     return;
   }
@@ -100,26 +99,27 @@ document.getElementById("keySubmit").onclick = async () => {
 document.getElementById("downloadBtn").onclick = async () => {
   const key = document.getElementById("keyInput")?.value;
 
-  const response = await fetch("/functions/download", {
+  const res = await fetch("/download", {
     method: "POST",
     headers: { "Content-Type":"application/json" },
     body: JSON.stringify({ id, key })
   });
 
-  if (!response.ok) {
-    alert("Download failed: " + (await response.text()));
+  if (!res.ok) {
+    alert("Download failed: " + (await res.text()));
     return;
   }
 
-  const blob = await response.blob();
+  const blob = await res.blob();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = fileInfo.fileName || "file";  // <-- CORRECT FILENAME
+  a.download = fileInfo.fileName || "file";
   a.click();
 };
 
 init();
 </script>
+
 
 </body>
 </html>

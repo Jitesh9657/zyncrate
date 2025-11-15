@@ -1,27 +1,39 @@
 import { uploadToR2 } from "../lib/r2";
 import { execDB } from "../lib/db";
 
-export async function onRequest(context: any) {
-  const { env, request } = context;
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
-  // Only allow POST
-  if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
+export async function onRequestPost(context: any) {
+  const { env, request } = context;
 
   const contentType = request.headers.get("Content-Type") || "";
   if (!contentType.includes("multipart/form-data")) {
-    return new Response("Invalid form data", { status: 400 });
+    return new Response("Invalid form data", { status: 400, headers: CORS });
   }
 
   const form = await request.formData();
   const file = form.get("file") as File;
-  if (!file) return new Response(JSON.stringify({ success: false, error: "No file provided" }), { status: 400 });
+  if (!file) {
+    return new Response(
+      JSON.stringify({ success: false, error: "No file provided" }),
+      { status: 400, headers: { "Content-Type": "application/json", ...CORS } }
+    );
+  }
 
-  // Limits
-  const MAX_SIZE = 200 * 1024 * 1024; // 200MB
+  const MAX_SIZE = 200 * 1024 * 1024;
   if (file.size > MAX_SIZE) {
-    return new Response(JSON.stringify({ success: false, error: "File too large" }), { status: 413 });
+    return new Response(
+      JSON.stringify({ success: false, error: "File too large" }),
+      { status: 413, headers: { "Content-Type": "application/json", ...CORS } }
+    );
   }
 
   const expiryHours = Number(form.get("expiryHours")) || 24;
@@ -53,7 +65,7 @@ export async function onRequest(context: any) {
       maxDownloads,
       oneTime,
       key ? 1 : 0,
-      key || null
+      key || null,
     ]
   );
 
@@ -62,6 +74,6 @@ export async function onRequest(context: any) {
       success: true,
       downloadUrl: `/download.html?id=${id}`,
     }),
-    { headers: { "Content-Type": "application/json" } }
+    { headers: { "Content-Type": "application/json", ...CORS } }
   );
 }

@@ -4,3 +4,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
   Content-Security-Policy: default-src 'self'; script-src 'self' https://*.google.com https://*.googlesyndication.com https://*.adsense.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'
+
+/download.html*
+  Content-Type: text/html
+  X-Robots-Tag: noindex
