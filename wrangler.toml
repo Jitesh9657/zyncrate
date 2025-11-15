@@ -1,8 +1,9 @@
 name = "zyncrate"
 compatibility_date = "2024-11-05"
 
-# Required by Wrangler v4 for Pages
-pages_build_output_dir = "./public"
+# Tell Pages where to find assets and functions
+pages_build_output_dir = "public"
+pages_functions_build_dir = "functions"
 
 [[r2_buckets]]
 binding = "R2"
@@ -12,6 +13,3 @@ bucket_name = "zyncrate"
 binding = "DB"
 database_name = "zyncrate-db"
 database_id = "f45cd239-1fd5-460e-b95e-3a5df42359b8"
-
-[vars]
-BASE_URL = "https://zyncrate.pages.dev"
